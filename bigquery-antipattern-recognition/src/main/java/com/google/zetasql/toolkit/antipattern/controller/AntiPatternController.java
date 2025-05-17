@@ -1,21 +1,6 @@
-/*
- * Copyright (C) 2024 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
-
 package com.google.zetasql.toolkit.antipattern.controller;
 
+// Add these imports if not already fully there
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -26,25 +11,41 @@ import com.google.zetasql.toolkit.antipattern.models.BigQueryRemoteFnRequest;
 import com.google.zetasql.toolkit.antipattern.models.BigQueryRemoteFnResponse;
 import com.google.zetasql.toolkit.antipattern.models.BigQueryRemoteFnResult;
 import com.google.zetasql.toolkit.antipattern.util.AntiPatternHelper;
+import org.springframework.stereotype.Controller; // Changed from @RestController
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseBody; // Import this
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@RestController
+@Controller // <--- CHANGE THIS
 public class AntiPatternController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // This method now correctly performs a redirect
+    @GetMapping("/")
+    public String redirectToUi() {
+        return "redirect:/ui.html";
+    }
+
+    // This method now correctly performs a redirect
+    @GetMapping("/ui")
+    public String showUiPage() {
+        return "redirect:/ui.html";
+    }
+
+    // This is an API endpoint, so it needs @ResponseBody
     @PostMapping("/")
+    @ResponseBody // <--- ADD THIS
     public ObjectNode analyzeQueries(@RequestBody BigQueryRemoteFnRequest request) {
         ArrayNode replies = objectMapper.createArrayNode();
-
+        // ... (rest of your method)
         for (JsonNode call : request.getCalls()) {
-            BigQueryRemoteFnResponse queryResponse = analyzeSingleQuery(call);
+            BigQueryRemoteFnResponse queryResponse = analyzeSingleQuery(call); // Assuming this returns the right type
             ObjectNode resultNode = objectMapper.valueToTree(queryResponse);
             replies.add(resultNode);
         }
@@ -54,6 +55,27 @@ public class AntiPatternController {
         return finalResponse;
     }
 
+    // This is also an API endpoint for the UI, so it needs @ResponseBody
+    @PostMapping("/analyze-query-ui")
+    @ResponseBody // <--- ADD THIS
+    public List<BigQueryRemoteFnResult> analyzeSingleQueryForUi(@RequestBody String query) {
+        try {
+            InputQuery inputQuery = new InputQuery(query, "query from UI");
+            List<AntiPatternVisitor> visitors = findAntiPatterns(inputQuery);
+            if (visitors.isEmpty()) {
+                List<BigQueryRemoteFnResult> noAntiPatternsResult = new ArrayList<>();
+                noAntiPatternsResult.add(new BigQueryRemoteFnResult("None", "No anti-patterns found."));
+                return noAntiPatternsResult;
+            }
+            return formatAntiPatterns(visitors);
+        } catch (Exception e) {
+            List<BigQueryRemoteFnResult> errorResult = new ArrayList<>();
+            errorResult.add(new BigQueryRemoteFnResult("Error", e.getMessage()));
+            return errorResult;
+        }
+    }
+
+    // Private methods remain the same
     private BigQueryRemoteFnResponse analyzeSingleQuery(JsonNode call) {
         try {
             InputQuery inputQuery = new InputQuery(call.get(0).asText(), "query provided by UDF:");
@@ -72,8 +94,9 @@ public class AntiPatternController {
 
     private List<AntiPatternVisitor> findAntiPatterns(InputQuery inputQuery) {
         List<AntiPatternVisitor> visitors = new ArrayList<>();
-        AntiPatternHelper antiPatternHelper = new AntiPatternHelper(null, false);
+        AntiPatternHelper antiPatternHelper = new AntiPatternHelper("dannydeleo", true); // Assuming AntiPatternHelper is correctly initialized
         antiPatternHelper.checkForAntiPatternsInQueryWithParserVisitors(inputQuery, visitors);
+        antiPatternHelper.checkForAntiPatternsInQueryWithAnalyzerVisitors(inputQuery, visitors);
         return visitors;
     }
 

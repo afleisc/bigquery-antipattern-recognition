@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BigQuery Anti-Pattern Analyzer UI</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        textarea { width: 100%; min-height: 150px; margin-bottom: 10px; }
+        button { padding: 10px 15px; }
+        #results { margin-top: 20px; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9; }
+        .result-item { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dotted #eee; }
+        .result-item:last-child { border-bottom: none; }
+        .result-name { font-weight: bold; }
+        .result-detail { white-space: pre-wrap; } /* To preserve formatting in suggestion */
+    </style>
+</head>
+<body>
+    <h1>BigQuery Anti-Pattern Analyzer</h1>
+    <form id="queryForm">
+        <label for="queryInput">Enter your BigQuery SQL query:</label><br>
+        <textarea id="queryInput" name="queryInput" placeholder="SELECT * FROM my_table WHERE ..."></textarea><br>
+        <button type="button" onclick="submitQuery()">Analyze Query</button>
+    </form>
+
+    <div id="results">
+        <p>Results will appear here.</p>
+    </div>
+
+    <script>
+        async function submitQuery() {
+            const query = document.getElementById('queryInput').value;
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>Analyzing...</p>';
+
+            if (!query.trim()) {
+                resultsDiv.innerHTML = '<p style="color: red;">Please enter a query.</p>';
+                return;
+            }
+
+            try {
+                // Using the new /analyze-query-ui endpoint
+                const response = await fetch('/analyze-query-ui', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain', // Sending as plain text
+                    },
+                    body: query
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                }
+
+                const data = await response.json(); // Expecting List<BigQueryRemoteFnResult>
+
+                if (data && data.length > 0) {
+                    let htmlOutput = '<h3>Analysis Results:</h3>';
+                    data.forEach(item => {
+                        htmlOutput += `<div class="result-item">
+                                         <p><span class="result-name">${item.name}:</span></p>
+                                         <p class="result-detail">${item.result}</p>
+                                       </div>`;
+                    });
+                    resultsDiv.innerHTML = htmlOutput;
+                } else {
+                    resultsDiv.innerHTML = '<p>No specific anti-patterns found or no data returned.</p>';
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                resultsDiv.innerHTML = `<p style="color: red;">Error analyzing query: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
